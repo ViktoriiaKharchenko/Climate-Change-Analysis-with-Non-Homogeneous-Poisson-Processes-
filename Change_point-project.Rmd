@@ -1,0 +1,528 @@
+---
+title: "Project"
+output: html_document
+date: "2024-03-13"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE,echo = TRUE, message = FALSE)
+source("MCMC_sampling.R")
+source("Data_processing.R")
+source("PLP_model.R")
+```
+
+
+```{r}
+library(readxl)
+library(dplyr)
+library(ggplot2)
+library(zoo)
+```
+
+```{r}
+excel_file <- "Precip_v1.xls"  
+
+df = data_preprocessing(excel_file, "Almaty")
+
+ggplot(df, aes(x = Years, y = Average)) +
+  geom_line() +
+  geom_point() +
+  labs(x = "Year", y = "Average") +
+  ggtitle("Average Precipitation Over the Years")
+
+threshold <- get_threshold(df)
+
+period_numbers_above_mean <- get_exceedances(df, threshold)
+
+```
+
+
+```{r}
+T <- get_observation_period(df)
+
+set.seed(403-560)
+
+tau_prior <- function(T) runif(1, 1, 123)
+samples <- mcmc_sampling_with_changepoint(period_numbers_above_mean, T)
+
+theta = display_statistics2(samples)
+theta
+
+```
+
+
+```{r}
+
+theta1 <- c(theta[1], theta[2])  # Parameters (alpha, sigma) before τ
+theta2 <- c(theta[3], theta[4])  # Parameters (alpha, sigma) after τ
+tau <- theta[5]             # Change-point τ
+
+# Create a sequence of t values
+t_values <- seq(1, T, by = 1)
+
+# Calculate lambda(t) and m(t) for each t
+lambda_values <- lambda2(t_values, theta1, theta2, tau)
+m_t_values <- m_t2(t_values, theta1, theta2, tau)
+
+lambda_at_tau <- lambda2(tau, theta1, theta2, tau)
+m_t_at_tau <- m_t2(tau, theta1, theta2, tau)
+
+sim_df <- data.frame(t = t_values, Lambda = lambda_values, M_t = m_t_values) #cumsum(lambda_values))
+
+exceedances_df<-get_exceedance_cumsum(df, threshold)
+  
+  # Plot for cumulative number of exceedance cases
+ggplot() +
+  geom_line(data = exceedances_df, aes(x = YearInterval, y = CumulativeCases), color = "blue") +
+  geom_point(data = exceedances_df, aes(x = YearInterval, y = CumulativeCases), color = "blue", size = 2) +
+  # Plot for cumulative mean value function
+  geom_line(data = sim_df, aes(x = t, y = M_t), color = "red") +
+  geom_point(aes(x = tau, y = m_t_at_tau), color = "red", size = 3, shape = 23, fill = "white") +
+  labs(x = "Year", y = "Cumulative Number of Exceedance Cases / Rate Function",
+       title = "Cumulative Number of Exceedance Cases") +
+  theme_minimal() +
+  scale_y_continuous(name = "Cumulative Number of Exceedance Cases", labels = NULL) 
+
+ggplot(sim_df, aes(x = t, y = Lambda)) +
+  geom_line(color = "green") +
+  labs(x = "Time", y = "Lambda Values", title = "Lambda Values Over Time") +
+  theme_minimal()
+```
+
+```{r}
+
+df$Average <- approximate_missing(df$Average)
+change_year = round(tau) + min(df$Years)-1
+change_year
+
+window_size <- 12
+df$MovingAverage <- rollmean(df$Average, window_size, align = 'center', fill = NA)
+
+ggplot(df, aes(x = Years, y = Average)) +
+  geom_line() +
+  geom_point() +  # Add points to the plot
+  geom_point(data = df[df$Years == change_year, ], aes(x = Years, y = Average),
+             color = "blue", size = 3, shape = 8) +  # Highlight point at tau
+  geom_line(aes(y = MovingAverage), color = "red") +  # Moving average line
+  labs(x = "Year", y = "Average") +
+  ggtitle("Average Precipitation Over the Years")
+
+```
+
+```{r}
+
+excel_file <- "Tmax.xlsx"  
+
+df = data_preprocessing(excel_file, "Almaty")
+
+ggplot(df, aes(x = Years, y = Average)) +
+  geom_line() +
+  geom_point() +
+  labs(x = "Year", y = "Average") +
+  ggtitle("Average Precipitation Over the Years")
+
+threshold <- get_threshold(df)
+
+period_numbers_above_mean <- get_exceedances(df, threshold)
+
+```
+
+```{r}
+
+T <- get_observation_period(df)
+
+set.seed(403-560)
+
+tau_prior <- function(T) runif(1, 1, 87)
+samples <- mcmc_sampling_with_changepoint(period_numbers_above_mean, T)
+
+theta = display_statistics2(samples)
+theta
+
+
+```
+
+
+```{r}
+
+theta1 <- c(theta[1], theta[2])  # Parameters (alpha, sigma) before τ
+theta2 <- c(theta[3], theta[4])  # Parameters (alpha, sigma) after τ
+tau <- theta[5]             # Change-point τ
+
+# Create a sequence of t values
+t_values <- seq(1, T, by = 1)
+
+# Calculate lambda(t) and m(t) for each t
+lambda_values <- lambda2(t_values, theta1, theta2, tau)
+m_t_values <- m_t2(t_values, theta1, theta2, tau)
+
+lambda_at_tau <- lambda2(tau, theta1, theta2, tau)
+m_t_at_tau <- m_t2(tau, theta1, theta2, tau)
+
+sim_df <- data.frame(t = t_values, Lambda = lambda_values, M_t = m_t_values) #cumsum(lambda_values))
+
+exceedances_df<-get_exceedance_cumsum(df, threshold)
+  
+  # Plot for cumulative number of exceedance cases
+ggplot() +
+  geom_line(data = exceedances_df, aes(x = YearInterval, y = CumulativeCases), color = "blue") +
+  geom_point(data = exceedances_df, aes(x = YearInterval, y = CumulativeCases), color = "blue", size = 2) +
+  # Plot for cumulative mean value function
+  geom_line(data = sim_df, aes(x = t, y = M_t), color = "red") +
+  geom_point(aes(x = tau, y = m_t_at_tau), color = "red", size = 3, shape = 23, fill = "white") +
+  labs(x = "Year", y = "Cumulative Number of Exceedance Cases / Rate Function",
+       title = "Cumulative Number of Exceedance Cases") +
+  theme_minimal() +
+  scale_y_continuous(name = "Cumulative Number of Exceedance Cases", labels = NULL) 
+
+ggplot(sim_df, aes(x = t, y = Lambda)) +
+  geom_line(color = "green") +
+  labs(x = "Time", y = "Lambda Values", title = "Lambda Values Over Time") +
+  theme_minimal()
+```
+
+```{r}
+
+df$Average <- approximate_missing(df$Average)
+change_year = round(tau) + min(df$Years)-1
+change_year
+
+window_size <- 12
+df$MovingAverage <- rollmean(df$Average, window_size, align = 'center', fill = NA)
+
+ggplot(df, aes(x = Years, y = Average)) +
+  geom_line() +
+  geom_point() +  # Add points to the plot
+  geom_point(data = df[df$Years == change_year, ], aes(x = Years, y = Average),
+             color = "blue", size = 3, shape = 8) +  # Highlight point at tau
+  geom_line(aes(y = MovingAverage), color = "red") +  # Moving average line
+  labs(x = "Year", y = "Average") +
+  ggtitle("Average Precipitation Over the Years")
+
+```
+
+```{r}
+excel_file <- "Tmax.xlsx"  
+
+df = data_preprocessing(excel_file, "Tashkent")
+
+ggplot(df, aes(x = Years, y = Average)) +
+  geom_line() +
+  geom_point() +
+  labs(x = "Year", y = "Average") +
+  ggtitle("Average Precipitation Over the Years")
+
+threshold <- get_threshold(df)
+
+period_numbers_above_mean <- get_exceedances(df, threshold)
+
+```
+
+```{r}
+
+T <- get_observation_period(df)
+print(T)
+set.seed(403-560)
+alpha_prior <- function() rgamma(1, 1.5, 1)
+sigma_prior <- function() runif(1, 1, 30)
+
+tau_prior <- function(T) runif(1, 1, 110)
+
+samples <- mcmc_sampling_with_changepoint(period_numbers_above_mean, T)
+
+theta = display_statistics2(samples)
+theta
+
+```
+
+
+```{r}
+
+theta1 <- c(theta[1], theta[2])  # Parameters (alpha, sigma) before τ
+theta2 <- c(theta[3], theta[4])  # Parameters (alpha, sigma) after τ
+tau <- theta[5]             # Change-point τ
+
+# Create a sequence of t values
+t_values <- seq(1, T, by = 1)
+
+# Calculate lambda(t) and m(t) for each t
+lambda_values <- lambda2(t_values, theta1, theta2, tau)
+m_t_values <- m_t2(t_values, theta1, theta2, tau)
+
+lambda_at_tau <- lambda2(tau, theta1, theta2, tau)
+m_t_at_tau <- m_t2(tau, theta1, theta2, tau)
+
+sim_df <- data.frame(t = t_values, Lambda = lambda_values, M_t = m_t_values) #cumsum(lambda_values))
+
+exceedances_df<-get_exceedance_cumsum(df, threshold)
+  
+  # Plot for cumulative number of exceedance cases
+ggplot() +
+  geom_line(data = exceedances_df, aes(x = YearInterval, y = CumulativeCases), color = "blue") +
+  geom_point(data = exceedances_df, aes(x = YearInterval, y = CumulativeCases), color = "blue", size = 2) +
+  # Plot for cumulative mean value function
+  geom_line(data = sim_df, aes(x = t, y = M_t), color = "red") +
+  geom_point(aes(x = tau, y = m_t_at_tau), color = "red", size = 3, shape = 23, fill = "white") +
+  labs(x = "Year", y = "Cumulative Number of Exceedance Cases / Rate Function",
+       title = "Cumulative Number of Exceedance Cases") +
+  theme_minimal() +
+  scale_y_continuous(name = "Cumulative Number of Exceedance Cases", labels = NULL) 
+
+ggplot(sim_df, aes(x = t, y = Lambda)) +
+  geom_line(color = "green") +
+  labs(x = "Time", y = "Lambda Values", title = "Lambda Values Over Time") +
+  theme_minimal()
+```
+
+```{r}
+
+df$Average <- approximate_missing(df$Average)
+change_year = round(tau) + min(df$Years)-1
+change_year
+
+window_size <- 12
+df$MovingAverage <- rollmean(df$Average, window_size, align = 'center', fill = NA)
+
+ggplot(df, aes(x = Years, y = Average)) +
+  geom_line() +
+  geom_point() +  # Add points to the plot
+  geom_point(data = df[df$Years == change_year, ], aes(x = Years, y = Average),
+             color = "blue", size = 3, shape = 8) +  # Highlight point at tau
+  geom_line(aes(y = MovingAverage), color = "red") +  # Moving average line
+  labs(x = "Year", y = "Average") +
+  ggtitle("Average Precipitation Over the Years")
+
+```
+
+
+```{r}
+
+excel_file_path <- "USA_Tever.xlsx"
+data <- read_excel(excel_file_path)
+data <- t(data)
+years <- 1895:(1895 + length(data) - 1)
+df <- data.frame(Years = years, Average = data)
+df$YearInterval <- df$Years - min(df$Years)+1
+rownames(df) <- NULL
+
+ggplot(df, aes(x = Years, y = Average)) +
+  geom_line() +
+  geom_point() +
+  labs(x = "Year", y = "Average") +
+  ggtitle("Average Precipitation Over the Years")
+
+threshold <- get_threshold(df)
+
+period_numbers_above_mean <- get_exceedances(df, threshold)
+
+```
+
+```{r}
+
+T <- get_observation_period(df)
+
+set.seed(403-560) 
+
+tau_prior <- function(T) runif(1, 1, 121)
+alpha_prior <- function() rgamma(1, 1.7, 1)
+sigma_prior <- function() runif(1, 1, 30)
+
+samples <- mcmc_sampling_with_changepoint(period_numbers_above_mean, T)
+
+theta = display_statistics2(samples)
+theta
+
+```
+
+
+
+```{r}
+
+theta1 <- c(theta[1], theta[2])  # Parameters (alpha, sigma) before τ
+theta2 <- c(theta[3], theta[4])  # Parameters (alpha, sigma) after τ
+tau <- theta[5]             # Change-point τ
+
+# Create a sequence of t values
+t_values <- seq(1, T, by = 1)
+
+# Calculate lambda(t) and m(t) for each t
+lambda_values <- lambda2(t_values, theta1, theta2, tau)
+m_t_values <- m_t2(t_values, theta1, theta2, tau)
+
+lambda_at_tau <- lambda2(tau, theta1, theta2, tau)
+m_t_at_tau <- m_t2(tau, theta1, theta2, tau)
+
+sim_df <- data.frame(t = t_values, Lambda = lambda_values, M_t = m_t_values) #cumsum(lambda_values))
+
+exceedances_df<-get_exceedance_cumsum(df, threshold)
+  
+  # Plot for cumulative number of exceedance cases
+ggplot() +
+  geom_line(data = exceedances_df, aes(x = YearInterval, y = CumulativeCases), color = "blue") +
+  geom_point(data = exceedances_df, aes(x = YearInterval, y = CumulativeCases), color = "blue", size = 2) +
+  # Plot for cumulative mean value function
+  geom_line(data = sim_df, aes(x = t, y = M_t), color = "red") +
+  geom_point(aes(x = tau, y = m_t_at_tau), color = "red", size = 3, shape = 23, fill = "white") +
+  labs(x = "Year", y = "Cumulative Number of Exceedance Cases / Rate Function",
+       title = "Cumulative Number of Exceedance Cases") +
+  theme_minimal() +
+  scale_y_continuous(name = "Cumulative Number of Exceedance Cases", labels = NULL) 
+
+ggplot(sim_df, aes(x = t, y = Lambda)) +
+  geom_line(color = "green") +
+  labs(x = "Time", y = "Lambda Values", title = "Lambda Values Over Time") +
+  theme_minimal()
+
+```
+
+
+```{r}
+
+df$Average <- approximate_missing(df$Average)
+change_year = round(tau) + min(df$Years)-1
+change_year
+
+window_size <- 12
+df$MovingAverage <- rollmean(df$Average, window_size, align = 'center', fill = NA)
+
+ggplot(df, aes(x = Years, y = Average)) +
+  geom_line() +
+  geom_point() +  # Add points to the plot
+  geom_point(data = df[df$Years == change_year, ], aes(x = Years, y = Average),
+             color = "blue", size = 3, shape = 8) +  # Highlight point at tau
+  geom_line(aes(y = MovingAverage), color = "red") +  # Moving average line
+  labs(x = "Year", y = "Average") +
+  ggtitle("Average Precipitation Over the Years")
+
+```
+
+```{r}
+excel_file <- "Ukraine_temp.xlsx"  
+  data <- read_excel(excel_file)
+
+  # Replace -999.0 with NA and handle comma as decimal separator
+  data_cleaned <- data %>%
+    mutate(across(I:XII, ~ ifelse(. == -999.0, NA, .))) %>%
+    mutate(across(I:XII, ~ gsub(",", ".", .))) %>%
+    mutate(across(I:XII, ~ as.numeric(.)))
+  
+  
+  # Sort data
+  sorted_data <- arrange(data_cleaned, Years)
+  
+  # Calculate average, handling rows where all values are NA
+  sorted_data$Average <- apply(sorted_data[, c("I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII")], 1, function(x) {
+    if(all(is.na(x))) { 
+      return(NA) 
+    } else { 
+      return(mean(x, na.rm = TRUE))
+    }
+  })
+  
+
+  # Select and adjust years
+  df <- select(sorted_data, Years, Average)
+  df$YearInterval <- df$Years - min(df$Years) + 1
+  
+ggplot(df, aes(x = Years, y = Average)) +
+  geom_line() +
+  geom_point() +
+  labs(x = "Year", y = "Average") +
+  ggtitle("Average Precipitation Over the Years")
+
+threshold <- get_threshold(df)
+
+mean_before_1993 <- mean(df$Average[df$Years < 1993], na.rm = TRUE)
+mean_after_1993 <- mean(df$Average[df$Years >= 1993], na.rm = TRUE)
+
+# Create plot with ggplot2
+ggplot(df, aes(x = Years, y = Average)) +
+  geom_line() +
+  geom_point() +
+  geom_segment(aes(x = min(df$Years), xend = 1992, y = mean_before_1993, yend = mean_before_1993), 
+               color = "red", linetype = "dashed") +
+  geom_segment(aes(x = 1993, xend = max(df$Years), y = mean_after_1993, yend = mean_after_1993), 
+               color = "blue", linetype = "dashed") +
+  labs(x = "Year", y = "Average Temperature", title = "Average Temperature Over the Years") +
+  theme_minimal()
+
+
+period_numbers_above_mean <- get_exceedances(df, threshold)
+
+```
+
+
+```{r}
+T <- get_observation_period(df)
+print(T)
+set.seed(403-560) 
+
+tau_prior <- function(T) runif(1, 40, T)
+alpha_prior <- function() rgamma(1, 2, 1)
+sigma_prior <- function() runif(1, 1, 40)
+
+samples <- mcmc_sampling_with_changepoint(period_numbers_above_mean, T)
+
+theta = display_statistics2(samples)
+theta
+```
+
+```{r}
+
+theta1 <- c(theta[1], theta[2])  # Parameters (alpha, sigma) before τ
+theta2 <- c(theta[3], theta[4])  # Parameters (alpha, sigma) after τ
+tau <- theta[5]             # Change-point τ
+
+# Create a sequence of t values
+t_values <- seq(1, T, by = 1)
+
+# Calculate lambda(t) and m(t) for each t
+lambda_values <- lambda2(t_values, theta1, theta2, tau)
+m_t_values <- m_t2(t_values, theta1, theta2, tau)
+
+lambda_at_tau <- lambda2(tau, theta1, theta2, tau)
+m_t_at_tau <- m_t2(tau, theta1, theta2, tau)
+
+sim_df <- data.frame(t = t_values, Lambda = lambda_values, M_t = m_t_values) #cumsum(lambda_values))
+
+exceedances_df<-get_exceedance_cumsum(df, threshold)
+  
+  # Plot for cumulative number of exceedance cases
+ggplot() +
+  geom_line(data = exceedances_df, aes(x = YearInterval, y = CumulativeCases), color = "blue") +
+  geom_point(data = exceedances_df, aes(x = YearInterval, y = CumulativeCases), color = "blue", size = 2) +
+  # Plot for cumulative mean value function
+  geom_line(data = sim_df, aes(x = t, y = M_t), color = "red") +
+  geom_point(aes(x = tau, y = m_t_at_tau), color = "red", size = 3, shape = 23, fill = "white") +
+  labs(x = "Year", y = "Cumulative Number of Exceedance Cases / Rate Function",
+       title = "Cumulative Number of Exceedance Cases") +
+  theme_minimal() +
+  scale_y_continuous(name = "Cumulative Number of Exceedance Cases", labels = NULL) 
+
+ggplot(sim_df, aes(x = t, y = Lambda)) +
+  geom_line(color = "green") +
+  labs(x = "Time", y = "Lambda Values", title = "Lambda Values Over Time") +
+  theme_minimal()
+
+
+```
+
+```{r}
+df$Average <- approximate_missing(df$Average)
+change_year = round(tau) + min(df$Years)-1
+change_year
+
+window_size <- 12
+df$MovingAverage <- rollmean(df$Average, window_size, align = 'center', fill = NA)
+
+ggplot(df, aes(x = Years, y = Average)) +
+  geom_line() +
+  geom_point() +  # Add points to the plot
+  geom_point(data = df[df$Years == change_year, ], aes(x = Years, y = Average),
+             color = "blue", size = 3, shape = 8) +  # Highlight point at tau
+  geom_line(aes(y = MovingAverage), color = "red") +  # Moving average line
+  labs(x = "Year", y = "Average") +
+  ggtitle("Average Precipitation Over the Years")
+
+```
+
